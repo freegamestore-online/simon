@@ -1,0 +1,13 @@
+{
+  "name": "simon",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=22" },
+  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "scripts": {
+    "dev": "pnpm --filter @simon/web dev",
+    "build": "pnpm --filter @simon/web build",
+    "preview": "pnpm --filter @simon/web preview",
+    "typecheck": "pnpm --filter @simon/web exec tsc -b"
+  }
+}
