@@ -98,7 +98,7 @@ export default function App() {
             </p>
             <button
               onClick={start}
-              className="px-6 py-3 rounded-xl font-semibold"
+              className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
               style={{ background: "var(--accent)", color: "#fff" }}
             >
               {phase === "menu" ? "Start Game" : "Play Again"}
