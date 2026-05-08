@@ -55,6 +55,21 @@ export default function App() {
             { label: "Round", value: score, accent: true },
             { label: "Best", value: bestScore },
           ]}
+          rules={
+            <div>
+              <h3 style={{marginBottom:'0.5rem',fontWeight:700}}>Simon</h3>
+              <p>Watch the color sequence, then repeat it.</p>
+              <h4 style={{marginTop:'0.75rem',fontWeight:600}}>Controls</h4>
+              <ul style={{paddingLeft:'1.2rem',marginTop:'0.25rem'}}>
+                <li>Tap or click the colored buttons</li>
+              </ul>
+              <h4 style={{marginTop:'0.75rem',fontWeight:600}}>Rules</h4>
+              <ul style={{paddingLeft:'1.2rem',marginTop:'0.25rem'}}>
+                <li>Sequence grows by one each round</li>
+                <li>One mistake = game over</li>
+              </ul>
+            </div>
+          }
           actions={<GameAuth />}
         />
       }
