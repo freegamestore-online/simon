@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSound } from "@freegamestore/games";
 
 interface GameProps {
   onScore: (s: number) => void;
@@ -23,7 +24,8 @@ const TONE_FREQ: Record<Color, number> = {
   blue: 440,
 };
 
-function playTone(color: Color, duration: number) {
+function playTone(color: Color, duration: number, muted: boolean) {
+  if (muted) return;
   try {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
@@ -66,6 +68,12 @@ export function Game({ onScore, onGameOver }: GameProps) {
   onScoreRef.current = onScore;
   onGameOverRef.current = onGameOver;
 
+  // Platform mute toggle. Read into a ref so showSequence/handlePress can see
+  // the current value without being recreated on every mute toggle.
+  const { muted } = useSound();
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+
   const showSequence = useCallback((seq: Color[], currentRound: number) => {
     setIsShowingSequence(true);
     const flashMs = getFlashDuration(currentRound);
@@ -77,7 +85,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
       setTimeout(() => {
         if (!alive.current) return;
         setLitColor(color);
-        playTone(color, flashMs);
+        playTone(color, flashMs, mutedRef.current);
       }, delay);
 
       setTimeout(() => {
@@ -128,7 +136,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
     const expected = sequence[playerIndex];
     setPressedColor(color);
-    playTone(color, 200);
+    playTone(color, 200, mutedRef.current);
 
     setTimeout(() => setPressedColor(null), 150);
 
