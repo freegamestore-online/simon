@@ -24,23 +24,38 @@ const TONE_FREQ: Record<Color, number> = {
   blue: 440,
 };
 
-function playTone(color: Color, duration: number, muted: boolean) {
-  if (muted) return;
-  try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = TONE_FREQ[color];
-    gain.gain.value = 0.3;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + duration / 1000);
-    osc.onended = () => ctx.close();
-  } catch {
-    // Web Audio not available — skip sound
+const ERROR_FREQ = 110;
+const ERROR_MS = 800;
+
+// One context for the whole page: browsers cap how many can exist, and iOS
+// only lets a context start from inside a user gesture (see unlockAudio).
+let audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (!audioCtx) {
+    try {
+      audioCtx = new AudioContext();
+    } catch {
+      return null; // Web Audio not available — skip sound
+    }
   }
+  if (audioCtx.state === "suspended") void audioCtx.resume();
+  return audioCtx;
+}
+
+function playTone(freq: number, duration: number, muted: boolean, type: OscillatorType = "sine") {
+  if (muted) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = 0.3;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration / 1000);
 }
 
 function getFlashDuration(round: number): number {
@@ -62,7 +77,13 @@ export function Game({ onScore, onGameOver }: GameProps) {
   const [round, setRound] = useState(0);
   const [pressedColor, setPressedColor] = useState<Color | null>(null);
 
+  const [errorColor, setErrorColor] = useState<Color | null>(null);
+
   const alive = useRef(true);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const schedule = useCallback((fn: () => void, ms: number) => {
+    timers.current.push(setTimeout(fn, ms));
+  }, []);
   const onScoreRef = useRef(onScore);
   const onGameOverRef = useRef(onGameOver);
   onScoreRef.current = onScore;
@@ -82,13 +103,13 @@ export function Game({ onScore, onGameOver }: GameProps) {
     // Initial delay before starting sequence
     let delay = 600;
     seq.forEach((color, i) => {
-      setTimeout(() => {
+      schedule(() => {
         if (!alive.current) return;
         setLitColor(color);
-        playTone(color, flashMs, mutedRef.current);
+        playTone(TONE_FREQ[color], flashMs, mutedRef.current);
       }, delay);
 
-      setTimeout(() => {
+      schedule(() => {
         if (!alive.current) return;
         setLitColor(null);
       }, delay + flashMs);
@@ -97,14 +118,14 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
       // After last color, enable player input
       if (i === seq.length - 1) {
-        setTimeout(() => {
+        schedule(() => {
           if (!alive.current) return;
           setIsShowingSequence(false);
           setPlayerIndex(0);
         }, delay);
       }
     });
-  }, []);
+  }, [schedule]);
 
   // Start first round on mount
   useEffect(() => {
@@ -118,8 +139,23 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
     return () => {
       alive.current = false;
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
     };
   }, [showSequence]);
+
+  // Resume the shared AudioContext from a real gesture (required on iOS).
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (!mutedRef.current) getAudioContext();
+    };
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
 
   const advanceRound = useCallback((prevSeq: Color[], prevRound: number) => {
     const next = COLORS[Math.floor(Math.random() * 4)]!;
@@ -134,31 +170,34 @@ export function Game({ onScore, onGameOver }: GameProps) {
   const handlePress = useCallback((color: Color) => {
     if (isShowingSequence || !alive.current) return;
 
-    const expected = sequence[playerIndex];
+    const expected = sequence[playerIndex]!;
     setPressedColor(color);
-    playTone(color, 200, mutedRef.current);
-
-    setTimeout(() => setPressedColor(null), 150);
+    schedule(() => setPressedColor(null), 150);
 
     if (color !== expected) {
+      // Buzz and flash the button that should have been pressed, then end.
       alive.current = false;
-      onGameOverRef.current();
+      playTone(ERROR_FREQ, ERROR_MS, mutedRef.current, "square");
+      setErrorColor(expected);
+      schedule(() => onGameOverRef.current(), ERROR_MS);
       return;
     }
+
+    playTone(TONE_FREQ[color], 200, mutedRef.current);
 
     const nextIndex = playerIndex + 1;
     if (nextIndex >= sequence.length) {
       // Player completed the sequence -- advance round
       setIsShowingSequence(true);
       setPlayerIndex(0);
-      setTimeout(() => {
+      schedule(() => {
         if (!alive.current) return;
         advanceRound(sequence, round);
       }, 500);
     } else {
       setPlayerIndex(nextIndex);
     }
-  }, [isShowingSequence, sequence, playerIndex, advanceRound, round]);
+  }, [isShowingSequence, sequence, playerIndex, advanceRound, round, schedule]);
 
   // Keyboard support: arrow keys or WASD
   useEffect(() => {
@@ -174,6 +213,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
     };
 
     const handleKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       const color = keyMap[e.key];
       if (color) {
         e.preventDefault();
@@ -188,7 +228,8 @@ export function Game({ onScore, onGameOver }: GameProps) {
   const getButtonStyle = (color: Color): React.CSSProperties => {
     const isLit = litColor === color;
     const isPressed = pressedColor === color;
-    const active = isLit || isPressed;
+    const isError = errorColor === color;
+    const active = isLit || isPressed || isError;
     const map = COLOR_MAP[color];
 
     return {
@@ -196,13 +237,14 @@ export function Game({ onScore, onGameOver }: GameProps) {
       transform: isPressed ? "scale(0.95)" : "scale(1)",
       transition: "background 0.15s, transform 0.1s",
       opacity: isShowingSequence && !isLit ? 0.6 : 1,
+      boxShadow: isError ? "0 0 0 4px #fff" : undefined,
     };
   };
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 select-none">
       <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
-        {isShowingSequence ? "Watch..." : "Your turn!"}
+        {errorColor ? "Wrong!" : isShowingSequence ? "Watch..." : "Your turn!"}
       </div>
 
       {/* Cross / diamond layout */}
