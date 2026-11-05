@@ -241,6 +241,15 @@ export function Game({ onScore, onGameOver }: GameProps) {
     };
   };
 
+  const pad = (color: Color) => (
+    <button
+      onPointerDown={() => handlePress(color)}
+      className="rounded-2xl cursor-pointer border-0 min-h-[120px]"
+      style={getButtonStyle(color)}
+      aria-label={color[0]!.toUpperCase() + color.slice(1)}
+    />
+  );
+
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 select-none">
       <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
@@ -259,37 +268,17 @@ export function Game({ onScore, onGameOver }: GameProps) {
       >
         {/* Row 1: top (green) in center */}
         <div />
-        <button
-          onPointerDown={() => handlePress("green")}
-          className="rounded-2xl cursor-pointer border-0 min-h-[120px]"
-          style={getButtonStyle("green")}
-          aria-label="Green"
-        />
+        {pad("green")}
         <div />
 
         {/* Row 2: left (blue), empty center, right (red) */}
-        <button
-          onPointerDown={() => handlePress("blue")}
-          className="rounded-2xl cursor-pointer border-0 min-h-[120px]"
-          style={getButtonStyle("blue")}
-          aria-label="Blue"
-        />
+        {pad("blue")}
         <div />
-        <button
-          onPointerDown={() => handlePress("red")}
-          className="rounded-2xl cursor-pointer border-0 min-h-[120px]"
-          style={getButtonStyle("red")}
-          aria-label="Red"
-        />
+        {pad("red")}
 
         {/* Row 3: bottom (yellow) in center */}
         <div />
-        <button
-          onPointerDown={() => handlePress("yellow")}
-          className="rounded-2xl cursor-pointer border-0 min-h-[120px]"
-          style={getButtonStyle("yellow")}
-          aria-label="Yellow"
-        />
+        {pad("yellow")}
         <div />
       </div>
 
